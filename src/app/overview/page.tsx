@@ -11,7 +11,7 @@ export default function OverviewPage() {
         <KpiCard title="Conversaciones hoy" value={data.conversaciones_hoy} />
         <KpiCard title="Fallback rate" value={(data.fallback_rate * 100).toFixed(1) + "%"} />
         <KpiCard title="Avg response time" value={`${data.avg_response_time} s`} />
-        <KpiCard title="Pendientes embedding" value={data.pendientes_embedding} />
+        <KpiCard title="pendientes embedding" value={data.pendientes_embedding} />
       </div>
       <MiniChart7d data={data.series_7d} />
     </div>

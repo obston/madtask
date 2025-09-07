@@ -1,37 +1,29 @@
-"use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
-const links = [
+const LINKS = [
   { href: "/overview", label: "Overview" },
   { href: "/conversaciones", label: "Conversaciones" },
-  { href: "/memoria", label: "Memoria" },
+  { href: "/agenda", label: "Agenda" },
   { href: "/mensajes", label: "Mensajes" },
+  { href: "/memoria", label: "Memoria" },
   { href: "/admin", label: "Admin" },
 ];
 
 export default function Sidebar() {
-  const pathname = usePathname();
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-4 border-b border-neutral-800 text-xl font-semibold">MadTask</div>
-      <nav className="p-2 space-y-1">
-        {links.map((l) => {
-          const active = pathname.startsWith(l.href);
-          return (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
-                active ? "bg-neutral-800 text-white" : "text-neutral-300 hover:bg-neutral-800/60 hover:text-white"
-              }`}
-            >
-              {l.label}
-            </Link>
-          );
-        })}
+    <aside className="w-64 shrink-0 border-r border-neutral-900 h-screen sticky top-0">
+      <nav className="p-4 space-y-1">
+        {LINKS.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className="block px-3 py-2 rounded hover:bg-neutral-900/50"
+          >
+            {l.label}
+          </Link>
+        ))}
       </nav>
       <div className="mt-auto p-3 text-xs text-neutral-500">Sprint 1 — MVP</div>
-    </div>
+    </aside>
   );
 }
