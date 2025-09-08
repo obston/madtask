@@ -1,20 +1,35 @@
 import { ConversationDetail, ConversationListItem, Overview } from "./types";
 
-export const overviewMock: Overview = {
-  conversaciones_hoy: 42,
-  fallback_rate: 0.11,
-  avg_response_time: 1.8,
-  pendientes_embedding: 3,
-  series_7d: [
-    { date: "2025-09-01", chats: 36 },
-    { date: "2025-09-02", chats: 12 },
-    { date: "2025-09-03", chats: 45 },
-    { date: "2025-09-04", chats: 34 },
-    { date: "2025-09-05", chats: 33 },
-    { date: "2025-09-06", chats: 41 },
-    { date: "2025-09-07", chats: 15 },
-  ],
-};
+export function overviewMock(): Overview {
+  // 15 días hacia atrás, hoy incluido
+  const days = 15;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const series_15d = Array.from({ length: days }).map((_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (days - 1 - i));
+    return {
+      date: d.toISOString().slice(0, 10),
+      chats: Math.max(5, Math.round(10 + 30 * Math.random())), // 5..40
+    };
+  });
+
+  const conversaciones_hoy = series_15d[series_15d.length - 1].chats;
+
+  const fallback_rate = 0.08 + Math.random() * 0.08; // ~8%..16%
+  const avg_response_time = +(1.3 + Math.random() * 1.2).toFixed(1); // 1.3..2.5 s
+  const pendientes_confirmar_memoria = Math.floor(2 + Math.random() * 6); // 2..7
+
+  return {
+    conversaciones_hoy,
+    fallback_rate,
+    avg_response_time,
+    pendientes_confirmar_memoria,
+    series_15d,
+  };
+}
+
 
 const baseItems: ConversationListItem[] = Array.from({ length: 20 }).map((_, i) => {
   const id = `s-${(i + 1).toString().padStart(4, "0")}`;
@@ -58,41 +73,3 @@ export function mockConversationDetail(session_id: string): ConversationDetail |
 }
 import type { FeedItem, AgendaEvent } from "./types";
 
-// ---- Mensajes (feed) ----
-export function mockFeed(q?: string, type?: string): FeedItem[] {
-  const base: FeedItem[] = Array.from({ length: 24 }).map((_, i) => ({
-    id: `m-${i + 1}`,
-    ts: new Date(Date.now() - i * 15 * 60_000).toISOString(),
-    session_id: `s-${String((i % 12) + 1).padStart(4, "0")}`,
-    type: (["message", "fallback", "error", "moderation"] as const)[i % 4],
-    role: i % 2 === 0 ? "user" : "bot",
-    text:
-      i % 4 === 1
-        ? "Fallback del bot: no entendí la intención"
-        : i % 4 === 2
-        ? "Error de proveedor LLM"
-        : i % 4 === 3
-        ? "Mensaje en revisión por moderación"
-        : `Mensaje normal #${i + 1}`,
-  }));
-  let out = base;
-  if (type && type !== "all") out = out.filter((x) => x.type === type);
-  const needle = (q ?? "").toLowerCase().trim();
-  if (needle) out = out.filter((x) => x.text.toLowerCase().includes(needle) || x.session_id.includes(needle));
-  return out;
-}
-
-// ---- Agenda (citas/eventos) ----
-export function mockAgenda(): AgendaEvent[] {
-  const start = new Date();
-  start.setHours(9, 0, 0, 0);
-  const slots = [0, 60, 120, 180, 240, 300, 360];
-  return slots.map((m, i) => ({
-    id: `a-${i + 1}`,
-    title: i % 3 === 0 ? "Cita de soporte" : i % 3 === 1 ? "Demo de producto" : "Seguimiento",
-    when: new Date(start.getTime() + m * 60_000).toISOString(),
-    duration_min: 30,
-    session_id: `s-${String((i % 10) + 1).padStart(4, "0")}`,
-    status: (["pending", "confirmed", "done"] as const)[i % 3],
-  }));
-}

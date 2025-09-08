@@ -3,17 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConversationDetail } from "@/lib/types";
 
-type Props = { initial: ConversationDetail };
+type Props = { initial: ConversationDetail; title?: string }; // 👈 añadimos title opcional
 
-export default function ChatPanel({ initial }: Props) {
+export default function ChatPanel({ initial, title }: Props) {
   const [data, setData] = useState<ConversationDetail>(initial);
   const [text, setText] = useState("");
   const [takingOver, setTakingOver] = useState(false);
   const id = useMemo(() => data.session_id, [data.session_id]);
-
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Polling suave cada 5s
+  // polling suave
   useEffect(() => {
     const t = setInterval(async () => {
       const res = await fetch(`/api/conversaciones/${id}`, { cache: "no-store" });
@@ -22,7 +21,7 @@ export default function ChatPanel({ initial }: Props) {
     return () => clearInterval(t);
   }, [id]);
 
-  // Auto-scroll al final cuando cambian los mensajes
+  // autoscroll en nuevos mensajes
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [data.messages.length]);
@@ -56,7 +55,8 @@ export default function ChatPanel({ initial }: Props) {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between border-b border-neutral-800 p-3">
-        <div className="font-medium">Conversación {id}</div>
+        {/* 👇 muestra número/usuario si lo recibimos */}
+        <div className="font-medium">{title ?? id}</div>
         <label className="text-sm flex items-center gap-2 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -92,7 +92,7 @@ export default function ChatPanel({ initial }: Props) {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown} // 👈 Enter para enviar (Shift+Enter = salto de línea)
+          onKeyDown={onKeyDown}
           placeholder={takingOver ? "Escribe tu mensaje…" : "Activa 'Tomar control' para responder"}
           disabled={!takingOver}
           className="flex-1 resize-none rounded-lg border border-neutral-800 bg-neutral-900 p-2 outline-none disabled:opacity-60"

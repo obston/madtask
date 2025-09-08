@@ -5,11 +5,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ session_id: string }> } // 👈 Promise
+  { params }: { params: Promise<{ session_id: string }> }
 ) {
-  const { session_id } = await params;                    // 👈 await
+  const { session_id } = await params;
   const data = getOrInitConversation(session_id);
-  if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  if (!data) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
   return NextResponse.json(data);
 }
-
