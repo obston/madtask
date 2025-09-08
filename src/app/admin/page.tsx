@@ -1,39 +1,30 @@
-export default async function AdminPage() {
+import Link from "next/link";
+
+export default function AdminIndex() {
+  const Card = ({ href, title, children }: any) => (
+    <Link href={href} className="block rounded-2xl border border-neutral-800 p-5 hover:bg-neutral-900 transition">
+      <h2 className="font-medium mb-2">{title}</h2>
+      <p className="text-sm text-neutral-400">{children}</p>
+    </Link>
+  );
+
   return (
-    <div className="p-6 space-y-6">
+    <main className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Admin</h1>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-neutral-800 p-4 space-y-2">
-          <div className="font-medium">Canales</div>
-          <div className="text-sm opacity-80">
-            • WhatsApp / FB App (números, webhooks, triggers)<br/>
-            • Email / Webchat / Otros
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-neutral-800 p-4 space-y-2">
-          <div className="font-medium">Bots por llamada (Voice)</div>
-          <div className="text-sm opacity-80">
-            • Proveedores, IVR, TTS/STT<br/>
-            • Flujo de transferencia a agente humano
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-neutral-800 p-4 space-y-2">
-          <div className="font-medium">Seguridad & Accesos</div>
-          <div className="text-sm opacity-80">
-            • Roles/Permisos, audit logs
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-neutral-800 p-4 space-y-2">
-          <div className="font-medium">Configuración del Bot</div>
-          <div className="text-sm opacity-80">
-            • Prompts, políticas, herramientas (fotos/archivos)
-          </div>
-        </div>
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card href="/admin/canales" title="Canales">
+          WhatsApp / FB App (números, webhooks, triggers) · Email · Webchat · Otros
+        </Card>
+        <Card href="/admin/voice" title="Bots por llamada (Voice)">
+          Proveedores, IVR, TTS/STT · Flujo de transferencia a agente humano
+        </Card>
+        <Card href="/admin/seguridad" title="Seguridad & Accesos">
+          Roles/Permisos, audit logs
+        </Card>
+        <Card href="/admin/config" title="Configuración del Bot">
+          Prompts, políticas, herramientas (fotos/archivos)
+        </Card>
       </div>
-    </div>
+    </main>
   );
 }

@@ -71,6 +71,52 @@ export type AgendaEvent = {
   external_event_id?: string; // si viene de Google
   calendar_id?: string;       // id del calendario (si aplica)
 };
+// ---- MEMORIA ----
+export type MemoryStatus = "pending" | "approved" | "archived" | "forgotten";
+export type MemoryKind = "fact" | "summary" | "doc";
+
+export interface MemoryItem {
+  id: string;
+  kind: MemoryKind;
+  text: string;
+  source?: { type: "conversation" | "manual" | "import"; ref?: string };
+  created_at: string;   // ISO
+  status: MemoryStatus;
+}
+
+// ---- ADMIN ----
+export interface AdminChannels {
+  whatsapp_numbers: { id: string; label: string; state: "connected" | "disconnected" }[];
+  fb_app?: { app_id?: string; webhook_url?: string };
+  email?: { inbound_address?: string };
+  webchat?: { enabled: boolean };
+}
+
+export interface AdminVoice {
+  provider: "none" | "twilio" | "vonage" | "net2phone";
+  stt: "whisper" | "deepgram" | "none";
+  tts: "azure" | "elevenlabs" | "none";
+  transfer_number?: string;
+}
+
+export interface AdminSecurity {
+  roles: { key: "owner" | "admin" | "agent" | "viewer"; name: string; perms: string[] }[];
+  audit_log_enabled: boolean;
+}
+
+export interface AdminBotConfig {
+  allow_files: boolean;
+  allow_images: boolean;
+  policies?: string;
+  system_prompt?: string;
+}
+
+export interface AdminSettings {
+  channels: AdminChannels;
+  voice: AdminVoice;
+  security: AdminSecurity;
+  bot: AdminBotConfig;
+}
 
 
   

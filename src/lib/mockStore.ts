@@ -1,4 +1,10 @@
 // src/lib/mockStore.ts
+import type {
+  MemoryItem,
+  MemoryStatus,
+  AdminSettings,
+} from "./types";
+
 import { addMinutes } from "date-fns";
 import type { AgendaEvent, FeedItem, FeedKind, FeedListResponse } from "./types";
 import type { ConversationDetail } from "./types";
@@ -213,4 +219,87 @@ export function getOrInitConversation(session_id: string): ConversationDetail {
   seedConversationIfNeeded(session_id);
   // en este mock siempre existirá tras el seed
   return conversationMap.get(session_id)!;
+}
+// ---- seed memoria ----
+let memorySeedTs = Date.now();
+const memNow = () => new Date(memorySeedTs += 30_000).toISOString();
+
+const _memories: MemoryItem[] = [
+  { id: "m-001", kind: "fact",    text: "La agencia ofrece tours a Cancún los viernes.", source:{type:"conversation",ref:"s-0003"}, created_at: memNow(), status: "pending" },
+  { id: "m-002", kind: "summary", text: "Cliente prefiere contacto por WhatsApp después de las 6pm.", source:{type:"conversation",ref:"+5233..."}, created_at: memNow(), status: "pending" },
+  { id: "m-003", kind: "doc",     text: "Política de reembolsos: 72 horas.", source:{type:"manual"}, created_at: memNow(), status: "approved" },
+  { id: "m-004", kind: "fact",    text: "Promoción 2x1 los martes.", source:{type:"import"}, created_at: memNow(), status: "archived" },
+];
+
+export function listMemories(opts?: { q?: string; status?: MemoryStatus; page?: number; limit?: number }) {
+  const { q = "", status, page = 1, limit = 20 } = opts ?? {};
+  const needle = q.trim().toLowerCase();
+  const filtered = _memories.filter(m =>
+    (!status || m.status === status) &&
+    (!needle || m.text.toLowerCase().includes(needle))
+  );
+  const start = (page - 1) * limit;
+  return {
+    items: filtered.slice(start, start + limit),
+    total: filtered.length,
+    summary: {
+      counts: {
+        pending: _memories.filter(m => m.status === "pending").length,
+        approved: _memories.filter(m => m.status === "approved").length,
+        archived: _memories.filter(m => m.status === "archived").length,
+        forgotten: _memories.filter(m => m.status === "forgotten").length,
+        all: _memories.length,
+      }
+    }
+  };
+}
+export function setMemoryStatus(id: string, status: MemoryStatus) {
+  const i = _memories.findIndex(m => m.id === id);
+  if (i >= 0) _memories[i].status = status;
+  return _memories[i] ?? null;
+}
+export function addMemory(item: Omit<MemoryItem, "id" | "created_at" | "status"> & { status?: MemoryStatus }) {
+  const it: MemoryItem = { id: `m-${Math.random().toString(36).slice(2,8)}`, created_at: new Date().toISOString(), status: item.status ?? "pending", ...item };
+  _memories.unshift(it);
+  return it;
+}
+export function reprocessEmbeddingsMock() {
+  // Simula que se "procesan" pendientes: mueve 1–2 a approved
+  const pend = _memories.filter(m => m.status === "pending").slice(0, 2);
+  pend.forEach(m => m.status = "approved");
+  return { processed: pend.length };
+}
+
+// ---- ADMIN settings ----
+const _adminSettings: AdminSettings = {
+  channels: {
+    whatsapp_numbers: [
+      { id: "wa-1", label: "+52 33 5555 000", state: "connected" },
+      { id: "wa-2", label: "+52 33 5555 002", state: "disconnected" },
+    ],
+    fb_app: { app_id: "1234567890", webhook_url: "https://example.com/webhook" },
+    email: { inbound_address: "bot@madtask.lat" },
+    webchat: { enabled: true },
+  },
+  voice: { provider: "none", stt: "whisper", tts: "azure", transfer_number: "" },
+  security: {
+    audit_log_enabled: true,
+    roles: [
+      { key:"owner", name:"Owner", perms:["*"] },
+      { key:"admin", name:"Admin", perms:["read","write","manage"] },
+      { key:"agent", name:"Agent", perms:["read","reply"] },
+      { key:"viewer", name:"Viewer", perms:["read"] },
+    ],
+  },
+  bot: { allow_files: true, allow_images: true, policies: "Sin contenido sensible.", system_prompt: "Sé útil y conciso." }
+};
+
+export const getAdminSettings = () => _adminSettings;
+export function updateAdminSettings(patch: Partial<AdminSettings>) {
+  // shallow merge razonable para mock
+  Object.assign(_adminSettings.channels, patch.channels ?? {});
+  Object.assign(_adminSettings.voice, patch.voice ?? {});
+  Object.assign(_adminSettings.security, patch.security ?? {});
+  Object.assign(_adminSettings.bot, patch.bot ?? {});
+  return _adminSettings;
 }
