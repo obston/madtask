@@ -1,31 +1,53 @@
-// src/app/api/overview/route.ts
 import { NextResponse } from "next/server";
-import { q, dbPing } from "@/lib/db";
+import { q } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  // Ejemplo de consulta real mínima (ajústala a tu esquema si ya tenías otra)
-  try {
-    const ok = await dbPing();
+type FeedRow = {
+  id: number;
+  role: "user" | "assistant" | "system";
+  message: string | null;
+  created_at: string; // ISO
+};
 
-    // Puedes cambiar estas consultas por las que ya usabas:
-    const [{ now }] = await q<{ now: string }>("SELECT NOW()::text as now");
-    // Ejemplo: contar conversaciones si tienes esa tabla/vista:
-    // const [{ total_conversaciones }] =
-    //   await q<{ total_conversaciones: number }>("SELECT COUNT(*)::int AS total_conversaciones FROM conversaciones");
+type CountRow = { role: string; n: number };
+
+export async function GET() {
+  try {
+    // En esta primera iteración usamos la sesión ficticia fija
+    const session_id = "pub_amazing_101_chat";
+
+    // Últimos 5 mensajes de esa sesión (más recientes primero)
+    const rows = await q<FeedRow>`
+      SELECT
+        id,
+        role::text,
+        message,
+        to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at
+      FROM n8n_chat_histories
+      WHERE session_id = ${session_id}
+      ORDER BY id DESC
+      LIMIT 5
+    `;
+
+    // Contadores por rol (opcional para tarjetas del overview)
+    const counts = await q<CountRow>`
+      SELECT role::text AS role, COUNT(*)::int AS n
+      FROM n8n_chat_histories
+      WHERE session_id = ${session_id}
+      GROUP BY role
+    `;
 
     return NextResponse.json({
-      status: ok ? "ok" : "fail",
-      now,
-      // total_conversaciones,
+      ok: true,
+      feed: rows,     // ojo: vienen DESC; si quieres asc, invierte con .toReversed()
+      counts,
     });
   } catch (err: any) {
-    console.error("[/api/overview] error:", err);
+    console.error("[/api/overview] error:", err?.message);
     return NextResponse.json(
-      { error: err?.message ?? "overview_error" },
+      { error: "overview_error", detail: String(err?.message ?? err) },
       { status: 500 }
     );
   }
 }
-

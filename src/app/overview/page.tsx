@@ -44,7 +44,8 @@ export default async function OverviewPage() {
   
 
   // Últimos 5 mensajes “message”
-  const latest = feed.slice(0, 5);
+  const feedArr = Array.isArray(data?.feed) ? data!.feed : [];
+const latest = feedArr.slice(0, 5);
 
   return (
     <div className="p-6 space-y-6">
