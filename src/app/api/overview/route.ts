@@ -1,53 +1,40 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
+import { getApiKey, sessionFromKey } from "@/lib/tenant";
+import { KpiPendientesRow, UltimoMensajeRow } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
-
-type FeedRow = {
-  id: number;
-  role: "user" | "assistant" | "system";
-  message: string | null;
-  created_at: string; // ISO
-};
-
-type CountRow = { role: string; n: number };
-
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    // En esta primera iteración usamos la sesión ficticia fija
-    const session_id = "pub_amazing_101_chat";
+    const apiKey = getApiKey(req);
+    const [cli] = await q<{ id: number }>(
+      `SELECT id FROM public.clientes_config WHERE activo = true AND api_key_publica = $1 LIMIT 1`,
+      [apiKey]
+    );
+    if (!cli) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
 
-    // Últimos 5 mensajes de esa sesión (más recientes primero)
-    const rows = await q<FeedRow>`
-      SELECT
-        id,
-        role::text,
-        message,
-        to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at
-      FROM n8n_chat_histories
-      WHERE session_id = ${session_id}
-      ORDER BY id DESC
-      LIMIT 5
-    `;
+    const [kpi] = await q<KpiPendientesRow>(
+      `SELECT COUNT(*)::int AS pendientes
+         FROM public.n8n_vectors
+        WHERE cliente_id = $1 AND embedding IS NULL`,
+      [cli.id]
+    );
 
-    // Contadores por rol (opcional para tarjetas del overview)
-    const counts = await q<CountRow>`
-      SELECT role::text AS role, COUNT(*)::int AS n
-      FROM n8n_chat_histories
-      WHERE session_id = ${session_id}
-      GROUP BY role
-    `;
+    const rows = await q<UltimoMensajeRow>(
+      `SELECT role, message, created_at
+         FROM public.n8n_chat_histories
+        WHERE session_id = $1
+        ORDER BY id DESC
+        LIMIT 10`,
+      [sessionFromKey(apiKey)]
+    );
 
     return NextResponse.json({
       ok: true,
-      feed: rows,     // ojo: vienen DESC; si quieres asc, invierte con .toReversed()
-      counts,
+      kpis: { pendientes_embeddings: kpi?.pendientes ?? 0 },
+      feed: rows.map((r, i) => ({ id: i, role: r.role, message: r.message, created_at: r.created_at })),
     });
-  } catch (err: any) {
-    console.error("[/api/overview] error:", err?.message);
-    return NextResponse.json(
-      { error: "overview_error", detail: String(err?.message ?? err) },
-      { status: 500 }
-    );
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "No se pudo cargar overview" }, { status: 500 });
   }
 }

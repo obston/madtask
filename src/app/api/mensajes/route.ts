@@ -1,61 +1,48 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
+import { getApiKey, sessionFromKey } from "@/lib/tenant";
+import { UltimoMensajeRow } from "@/lib/types";
 
-type MensajeItem = {
-  id: number;
-  role: "user" | "assistant" | "system";
-  message: string | null;
-  created_at: string; // ISO
-};
-
-type MensajesResponse = {
-  session_id: string;
-  items: MensajeItem[];
-  page: number;
-  limit: number;
-  total: number;
-};
+const N8N_BASE = process.env.N8N_BASE_URL || "http://localhost:5678";
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const searchParams = url.searchParams;
+  try {
+    const apiKey = getApiKey(req);
+    const url = new URL(req.url);
+    const limit = Math.min(parseInt(url.searchParams.get("limit") || "20", 10), 100);
 
-  const session_id = (searchParams.get("session_id") ?? "").trim();
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.max(1, Math.min(200, parseInt(searchParams.get("limit") ?? "20", 10)));
-  const offset = (page - 1) * limit;
+    const rows = await q<UltimoMensajeRow>(
+      `SELECT role, message, created_at
+         FROM public.n8n_chat_histories
+        WHERE session_id = $1
+        ORDER BY id DESC
+        LIMIT $2`,
+      [sessionFromKey(apiKey), limit]
+    );
 
-  if (!session_id) {
-    return NextResponse.json({ error: "Falta session_id" }, { status: 400 });
+    return NextResponse.json({ ok: true, data: rows });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "No se pudo cargar mensajes" }, { status: 500 });
   }
+}
 
-  // Total
-  const totalRows = await q<{ count: string }>`
-    SELECT COUNT(*)::text AS count
-    FROM n8n_chat_histories
-    WHERE session_id = ${session_id}
-  `;
-  const total = Number(totalRows[0]?.count ?? 0);
+export async function POST(req: Request) {
+  try {
+    const apiKey = getApiKey(req);
+    const { mensaje = "" } = await req.json();
+    if (!mensaje?.trim()) return NextResponse.json({ error: "mensaje requerido" }, { status: 400 });
 
-  // Mensajes (orden ascendente para leer la historia en orden)
-  const rows = await q<MensajeItem>`
-    SELECT
-      id,
-      role::text,
-      message,
-      to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') AS created_at
-    FROM n8n_chat_histories
-    WHERE session_id = ${session_id}
-    ORDER BY id ASC
-    LIMIT ${limit} OFFSET ${offset}
-  `;
-
-  const payload: MensajesResponse = {
-    session_id,
-    items: rows,
-    page,
-    limit,
-    total,
-  };
-  return NextResponse.json(payload);
+    // Reenvía al webhook n8n /mensaje-entrada (flujo modular actual)
+    const r = await fetch(`${N8N_BASE}/webhook/mensaje-entrada`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key_publica: apiKey, mensaje }),
+    });
+    const text = await r.text();
+    return NextResponse.json({ ok: r.ok, status: r.status, respuesta: text });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "No se pudo enviar mensaje" }, { status: 500 });
+  }
 }
