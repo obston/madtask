@@ -1,4 +1,3 @@
-// src/lib/tenant.ts
 const DEFAULT_API_KEY = "pub_amazing_101";
 
 export function getApiKey(req: Request): string {
@@ -10,6 +9,6 @@ export function getApiKey(req: Request): string {
   );
 }
 
-export function sessionFromKey(apiKey: string) {
+export function sessionFromKey(apiKey: string): string {
   return `${apiKey}_chat`;
 }

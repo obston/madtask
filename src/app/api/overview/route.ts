@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 import { getApiKey, sessionFromKey } from "@/lib/tenant";
-import { KpiPendientesRow, UltimoMensajeRow } from "@/lib/types";
+import type { KpiPendientesRow, UltimoMensajeRow } from "@/lib/types";
+
 
 export async function GET(req: Request) {
   try {

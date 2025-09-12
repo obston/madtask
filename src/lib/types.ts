@@ -116,7 +116,58 @@ export interface AdminSettings {
   voice: AdminVoice;
   security: AdminSecurity;
   bot: AdminBotConfig;
+  
+}
+
+export interface KpiPendientesRow {
+  pendientes: number; // SELECT COUNT(*)::int AS pendientes
+}
+
+// Fila mínima para SELECT role, message, created_at
+export interface UltimoMensajeRow {
+  role: "user" | "assistant" | "system";
+  message: string | null;
+  created_at: string;
 }
 
 
-  
+
+
+
+
+  // Fila mínima para SELECT role, message, created_at
+export interface UltimoMensajeRow {
+  role: "user" | "assistant" | "system";
+  message: string | null;
+  created_at: string;
+}
+
+
+
+// KPIs pendientes
+export interface KpiPendientesRow {
+  pendientes: number; // SELECT COUNT(*)::int AS pendientes
+}
+
+
+
+  // --- Para /api/mensajes y /api/overview (últimos mensajes) ---
+export interface UltimoMensajeRow {
+  id: number;
+  role: "user" | "assistant" | "system";
+  message: string | null;
+  created_at: string;
+}
+
+// --- Ítems del feed que muestra el Overview ---
+export type OverviewFeedItem = {
+  id: number;
+  role: "user" | "assistant" | "system";
+  message: string | null;
+  created_at: string;
+};
+
+// --- Respuesta del API de overview del dashboard ---
+export type ApiOverview =
+  | { ok: true; kpis: { pendientes_embeddings: number }; feed: OverviewFeedItem[] }
+  | { error: string };

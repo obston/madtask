@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
 import { getApiKey, sessionFromKey } from "@/lib/tenant";
-import { UltimoMensajeRow } from "@/lib/types";
+import type { UltimoMensajeRow } from "@/lib/types";
 
 const N8N_BASE = process.env.N8N_BASE_URL || "http://localhost:5678";
 
