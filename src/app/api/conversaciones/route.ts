@@ -1,59 +1,87 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { q } from "@/lib/db";
-export const dynamic = "force-dynamic";
+import { getApiKey } from "@/lib/tenant";
 
-export async function GET(req: NextRequest) {
+type ConversationListItem = {
+  session_id: string;
+  phone_or_user: string;
+  ultimo_mensaje: string;
+  hora: string;        // ISO string
+  estado: string;      // por ahora “abierta”
+};
+
+export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
-    const pageSize = Math.min(Math.max(parseInt(searchParams.get("pageSize") || "20", 10), 1), 100);
-    const qText = (searchParams.get("q") || "").trim();
+    const apiKey = getApiKey(req);
+    const url = new URL(req.url);
+    const page = Math.max(parseInt(url.searchParams.get("page") || "1", 10), 1);
+    const pageSize = Math.min(Math.max(parseInt(url.searchParams.get("pageSize") || "20", 10), 1), 100);
+    const qText = (url.searchParams.get("q") || "").trim();
+
+    // 1) Cliente
+    const cli = await q<{ id: number }>(
+      `SELECT id FROM public.clientes_config WHERE activo = true AND api_key_publica = $1 LIMIT 1`,
+      [apiKey],
+    );
+    if (!cli[0]) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
+    const cliId = cli[0].id;
+
+    // 2) WHERE + params dinámicos (evita huecos $3, $4… cuando no hay búsqueda)
+    const whereParts: string[] = [`ch.cliente_id = $1`];
+    const params: any[] = [cliId];
+
+    if (qText) {
+      params.push(`%${qText}%`);
+      whereParts.push(`ch.message ILIKE $${params.length}`);
+    }
+    const whereSQL = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
+
+    // 3) Total (para paginar)
+    const totalRows = await q<{ total: number }>(
+      `SELECT COUNT(*)::int AS total
+         FROM (
+           SELECT DISTINCT ch.session_id
+             FROM public.n8n_chat_histories ch
+             ${whereSQL}
+         ) s`,
+      params,
+    );
+    const total = totalRows[0]?.total ?? 0;
+    const pages = Math.max(Math.ceil(total / pageSize), 1);
     const offset = (page - 1) * pageSize;
 
-    const params: any[] = [pageSize, offset];
-    const whereSearch = qText ? `WHERE lm.message ILIKE $3` : "";
-    if (qText) params.push(`%${qText}%`);
-
-    const items = await q<{
-      session_id: string;
-      last_message_at: string | null;
-      last_role: string | null;
-      last_message: string | null;
-      total_messages: number;
-    }>(
+    // 4) Items (último mensaje por sesión)
+    //    DISTINCT ON + ORDER BY id DESC para tomar el último
+    const items = await q<ConversationListItem>(
       `
       WITH last_msg AS (
-        SELECT DISTINCT ON (session_id)
-               session_id, role, message, created_at
-        FROM public.n8n_chat_histories
-        ORDER BY session_id, created_at DESC
-      ),
-      counts AS (
-        SELECT session_id, COUNT(*)::int AS total_messages
-        FROM public.n8n_chat_histories
-        GROUP BY session_id
+        SELECT DISTINCT ON (ch.session_id)
+               ch.session_id,
+               ch.message,
+               ch.created_at
+          FROM public.n8n_chat_histories ch
+          ${whereSQL}
+         ORDER BY ch.session_id, ch.id DESC
       )
-      SELECT lm.session_id,
-             lm.created_at::text AS last_message_at,
-             lm.role AS last_role,
-             lm.message AS last_message,
-             c.total_messages
+      SELECT
+        lm.session_id,
+        ''::text AS phone_or_user,
+        COALESCE(lm.message, '') AS ultimo_mensaje,
+        to_char(lm.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS hora,
+        'abierta'::text AS estado
       FROM last_msg lm
-      JOIN counts c ON c.session_id = lm.session_id
-      ${whereSearch}
       ORDER BY lm.created_at DESC
-      LIMIT $1 OFFSET $2
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
       `,
-      params
+      [...params, pageSize, offset],
     );
 
-    const [{ total }] = await q<{ total: number }>(
-      `SELECT COUNT(DISTINCT session_id)::int AS total FROM public.n8n_chat_histories`
-    );
-
-    return NextResponse.json({ page, pageSize, total, items });
-  } catch (err: any) {
-    console.error("[/api/conversaciones] error:", err);
-    return NextResponse.json({ error: err?.message ?? "conversaciones_error" }, { status: 500 });
+    return NextResponse.json({
+      items, page, pages, total,
+      counts: { abierta: total, pendiente: 0, resuelta: 0 },
+    });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "No se pudo cargar conversaciones" }, { status: 500 });
   }
 }
