@@ -1,41 +1,47 @@
-import { NextResponse } from "next/server";
-import { q } from "@/lib/db";
-import { getApiKey, sessionFromKey } from "@/lib/tenant";
-import type { KpiPendientesRow, UltimoMensajeRow } from "@/lib/types";
-
+import { NextResponse } from 'next/server';
+import { q, qOne } from '@/lib/db';
+import { resolveClienteId } from '@/lib/tenant';
 
 export async function GET(req: Request) {
   try {
-    const apiKey = getApiKey(req);
-    const [cli] = await q<{ id: number }>(
-      `SELECT id FROM public.clientes_config WHERE activo = true AND api_key_publica = $1 LIMIT 1`,
-      [apiKey]
-    );
-    if (!cli) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
+    const clienteId = await resolveClienteId(req);
 
-    const [kpi] = await q<KpiPendientesRow>(
-      `SELECT COUNT(*)::int AS pendientes
-         FROM public.n8n_vectors
-        WHERE cliente_id = $1 AND embedding IS NULL`,
-      [cli.id]
+    const pend = await qOne<{ cnt: number }>(
+      `SELECT COUNT(*)::int AS cnt
+       FROM public.n8n_vectors
+       WHERE cliente_id = $1 AND state = 'pending'`,
+      [clienteId]
     );
 
-    const rows = await q<UltimoMensajeRow>(
+    const conv24 = await qOne<{ cnt: number }>(
+      `SELECT COUNT(DISTINCT session_id)::int AS cnt
+       FROM public.n8n_chat_histories
+       WHERE cliente_id = $1 AND created_at >= NOW() - INTERVAL '24 hours'`,
+      [clienteId]
+    );
+
+    const feed = await q<{ role: string; message: string | null; created_at: string }>(
       `SELECT role, message, created_at
-         FROM public.n8n_chat_histories
-        WHERE session_id = $1
-        ORDER BY id DESC
-        LIMIT 10`,
-      [sessionFromKey(apiKey)]
+       FROM public.n8n_chat_histories
+       WHERE cliente_id = $1
+       ORDER BY created_at DESC
+       LIMIT 10`,
+      [clienteId]
     );
+
+    const pendientes_embeddings = pend?.cnt ?? 0;
+    const conversaciones_24h   = conv24?.cnt ?? 0;
 
     return NextResponse.json({
       ok: true,
-      kpis: { pendientes_embeddings: kpi?.pendientes ?? 0 },
-      feed: rows.map((r, i) => ({ id: i, role: r.role, message: r.message, created_at: r.created_at })),
+      // shape nuevo para tu UI actual:
+      kpis: { pendientes_embeddings, conversaciones_24h },
+      // y dejamos los campos también al nivel raíz por si lo usas en otro lado:
+      pendientes_embeddings,
+      conversaciones_24h,
+      feed,
     });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "No se pudo cargar overview" }, { status: 500 });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }
 }
