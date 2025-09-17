@@ -294,12 +294,12 @@ const _adminSettings: AdminSettings = {
   bot: { allow_files: true, allow_images: true, policies: "Sin contenido sensible.", system_prompt: "Sé útil y conciso." }
 };
 
-export const getAdminSettings = () => _adminSettings;
-export function updateAdminSettings(patch: Partial<AdminSettings>) {
-  // shallow merge razonable para mock
-  Object.assign(_adminSettings.channels, patch.channels ?? {});
-  Object.assign(_adminSettings.voice, patch.voice ?? {});
-  Object.assign(_adminSettings.security, patch.security ?? {});
-  Object.assign(_adminSettings.bot, patch.bot ?? {});
-  return _adminSettings;
-}
+// ---- Conversaciones (mock) ----
+export function appendMessage(
+   session_id: string,
+    msg: { role: "user" | "bot"; text: string; ts: string }
+  ) {
+   const conv = getOrInitConversation(session_id);
+  conv.messages.push(msg);
+   return conv;
+  }

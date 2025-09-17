@@ -1,41 +1,29 @@
-// src/app/conversaciones/page.tsx
-import { ConversationList } from "@/components/ConversationList"; 
-import { ChatPanel } from "@/components/ChatPanel";
-import { getBaseUrl } from "@/lib/getBaseUrl";
-import type { ConversationListItem } from "@/lib/types";
+import api from "@/lib/api";
+import ConversationList from "@/components/ConversationList";
 
-export default async function ConversacionesPage({ searchParams }: { searchParams?: { q?: string; page?: string } }) {
-  const base = await getBaseUrl();
-  const q = encodeURIComponent(searchParams?.q ?? "");
-  const page = parseInt(searchParams?.page ?? "1", 10);
+type SP = { page?: string; q?: string; apiKey?: string; cliente_id?: string };
 
-  const [listRes, chatRes] = await Promise.all([
-    fetch(`${base}/api/conversaciones?q=${q}&page=${page}&pageSize=20`, { cache: "no-store" }),
-    fetch(`${base}/api/mensajes?type=message&limit=20`, { cache: "no-store" }), // opcional “últimos” si no hay selección
-  ]);
+export default async function ConversacionesPage({ searchParams }: { searchParams?: Promise<SP> }) {
+  const sp = (await searchParams) ?? {};
+  const page = Math.max(parseInt(sp.page ?? "1", 10), 1);
 
-  const listJson = await listRes.json();
-  const items: ConversationListItem[] = listJson?.items ?? [];
+  const qs = new URLSearchParams();
+  qs.set("page", String(page));
+  if (sp.q) qs.set("q", sp.q);
+  if (sp.cliente_id) qs.set("cliente_id", sp.cliente_id);
+  else if (sp.apiKey) qs.set("apiKey", sp.apiKey);
 
-  // si hay al menos una sesión, abrimos la primera a la derecha como preview
-  let preview: any[] = [];
-  if (items[0]?.session_id) {
-    const r = await fetch(`${base}/api/conversaciones/${items[0].session_id}?limit=200`, { cache: "no-store" });
-    const j = await r.json();
-    preview = j?.items ?? [];
-  }
+  const listJson = await api<{ ok: true; items: any[] }>(`/api/conversaciones?${qs.toString()}`);
+  const items = (listJson.items ?? []).map((r) => ({
+    ...r,
+    phone_or_user: r.phone_or_user ?? "",
+    estado: r.estado ?? "",
+  }));
 
   return (
     <div className="grid grid-cols-12 gap-6 p-6">
-      <div className="col-span-4">
-        <ConversationList items={items as any} active={items[0]?.session_id} />
-      </div>
-      <div className="col-span-8">
-        {items[0]?.session_id ? (
-          <ChatPanel sessionId={items[0].session_id} messages={preview} />
-        ) : (
-          <div className="rounded-lg border border-zinc-700 p-6">No hay conversaciones</div>
-        )}
+      <div className="col-span-12">
+        <ConversationList items={items} />
       </div>
     </div>
   );

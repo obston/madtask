@@ -1,17 +1,13 @@
-// src/app/conversaciones/[session_id]/page.tsx
+import api from "@/lib/api";
 import { ChatPanel } from "@/components/ChatPanel";
-import { getBaseUrl } from "@/lib/getBaseUrl";
 
-export default async function ConversacionPage(
-  props: { params: Promise<{ session_id: string }> } // 👈 Promise
-) {
-  const { session_id } = await props.params;        // 👈 await
-  const base = await getBaseUrl();
-  const res = await fetch(`${base}/api/conversaciones/${session_id}?limit=500`, { cache: "no-store" });
-  const json = await res.json();
+export const dynamic = "force-dynamic";
 
-  if (!json?.ok) return <div className="p-6">No se pudo cargar historial</div>;
+export default async function ConversacionPage({ params }: { params: { session_id: string } }) {
+  const { session_id } = params;
+  const limit = 500;
 
+  const json = await api<{ ok: true; items: any[] }>(`/api/conversaciones/${session_id}?limit=${limit}`);
   return <ChatPanel sessionId={session_id} messages={json.items ?? []} />;
 }
 

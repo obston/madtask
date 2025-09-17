@@ -1,25 +1,22 @@
-import { getBaseUrl } from "@/lib/getBaseUrl";
-import AgendaGrid from "@/components/AgendaGrid";
-import { startOfWeek, endOfWeek } from "date-fns";
-import type { AgendaEvent } from "@/lib/types";
+// src/app/agenda/page.tsx
+import api from "@/lib/api";
+export const dynamic = "force-dynamic";
 
-async function getData(fromISO: string, toISO: string): Promise<{ items: AgendaEvent[]; from: string; to: string }> {
-  const base = await getBaseUrl();
-  const url = `${base}/api/agenda?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error("No se pudo cargar agenda");
-  return res.json();
-}
+type SP = { fromISO?: string; toISO?: string; apiKey?: string; cliente_id?: string };
 
-export default async function AgendaPage() {
-  const from = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
-  const to = endOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
-  const { items, from: f, to: t } = await getData(from, to);
+export default async function AgendaPage({ searchParams }: { searchParams: Promise<SP> | SP }) {
+  const sp = await searchParams;
+  const qs = new URLSearchParams();
+  if (sp.fromISO) qs.set("from", sp.fromISO);
+  if (sp.toISO) qs.set("to", sp.toISO);
+  if (sp.cliente_id) qs.set("cliente_id", sp.cliente_id);
+  if (sp.apiKey) qs.set("apiKey", sp.apiKey);
 
+  const data = await api<{ items: any[] }>(`/api/agenda?${qs.toString()}`);
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-semibold">Agenda</h1>
-      <AgendaGrid initialEvents={items} startISO={f} endISO={t} />
+    <div className="p-6">
+      <h1 className="text-xl font-semibold">Agenda</h1>
+      {/* render de items o <Empty/> si no hay */}
     </div>
   );
 }

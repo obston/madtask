@@ -10,7 +10,7 @@ type Item = {
   estado: "abierta" | "pendiente" | "resuelta" | "todas";
 };
 
-export function ConversationList({ items, active }: { items: Item[]; active?: string }) {
+export default function ConversationList ({ items, active }: { items: Item[]; active?: string }) {
   return (
     <div className="w-full space-y-2">
       {items.map(it => (

@@ -1,50 +1,40 @@
 // src/lib/db.ts
-import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { Pool } from 'pg';
 
-declare global {
-  // Evita múltiples pools en dev por HMR
-  // eslint-disable-next-line no-var
-  var _pgPool: Pool | undefined;
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL, // ajusta si usas otra var
+  // ssl: { rejectUnauthorized: false }, // si tu pg necesita SSL
+});
+
+/** Tag template para queries con placeholders $1, $2, ... */
+function buildQuery(strings: TemplateStringsArray, values: any[]) {
+  // Une los trozos y mete $n entre cada valor
+  let text = '';
+  for (let i = 0; i < strings.length; i++) {
+    text += strings[i];
+    if (i < values.length) text += `$${i + 1}`;
+  }
+  return { text, values };
 }
 
-export const pool =
-  global._pgPool ??
-  new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl:
-      process.env.DB_SSL === 'true'
-        ? { rejectUnauthorized: false }
-        : undefined,
-    max: 10,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 2_000,
-  });
-
-if (!global._pgPool) global._pgPool = pool;
-
-/**
- * Query helper tipado. OJO: T debe extender QueryResultRow (requisito de pg).
- */
-export async function q<T extends QueryResultRow = QueryResultRow>(
-  text: string,
-  params?: any[],
-  client?: PoolClient
+export async function q<T = any>(
+  strings: TemplateStringsArray,
+  ...values: any[]
 ): Promise<T[]> {
-  const c = client ?? (await pool.connect());
+  const client = await pool.connect();
   try {
-    const res: QueryResult<T> = await c.query<T>(text, params);
-    return res.rows;
+    const { text, values: params } = buildQuery(strings, values);
+    const res = await client.query(text, params);
+    return res.rows as T[];
   } finally {
-    if (!client) c.release();
+    client.release();
   }
 }
 
-/** Devuelve una sola fila o null. */
-export async function qOne<T extends QueryResultRow = QueryResultRow>(
-  text: string,
-  params?: any[],
-  client?: PoolClient
+export async function qOne<T = any>(
+  strings: TemplateStringsArray,
+  ...values: any[]
 ): Promise<T | null> {
-  const rows = await q<T>(text, params, client);
+  const rows = await q<T>(strings, ...values);
   return rows[0] ?? null;
 }

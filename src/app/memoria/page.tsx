@@ -1,64 +1,38 @@
-import { pool } from '@/lib/db';
-import MemoriaTable, { MemItem } from '@/components/memoria/MemoriaTable';
+import api from "@/lib/api";
+import MemoryTable from "@/components/memoria/MemoriaTable";
+import Empty from "@/components/UI/Empty";
 
-export const dynamic = 'force-dynamic'; // evita cache en dev
+export type MemItem = {
+  id: number;
+  tipo: "user" | "assistant" | "system";
+  contenido: string;
+  estado: "pending" | "approved" | "archived" | "forgotten";
+  created_at: string;
+};
 
-export default async function MemoriaPage({
-  searchParams,
-}: {
-  searchParams?: { state?: string; q?: string; cliente_id?: string };
-}) {
-  const state = searchParams?.state ?? 'pending';
-  const q = searchParams?.q ?? '';
-  const clienteId =
-    searchParams?.cliente_id
-      ? Number(searchParams.cliente_id)
-      : process.env.CLIENTE_ID_DEFAULT
-      ? Number(process.env.CLIENTE_ID_DEFAULT)
-      : undefined;
+type SP = { state?: string; q?: string; cliente_id?: string; apiKey?: string };
 
-  if (!clienteId) {
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-semibold mb-4">Memoria</h1>
-        <p className="text-amber-400">
-          Falta definir <code>cliente_id</code> o <code>CLIENTE_ID_DEFAULT</code>.
-        </p>
-      </div>
-    );
-  }
+export default async function MemoriaPage({ searchParams }: { searchParams?: Promise<SP> }) {
+  const sp = (await searchParams) ?? {};
+  const qs = new URLSearchParams();
+  if (sp.state) qs.set("state", sp.state);
+  if (sp.q) qs.set("q", sp.q);
+  if (sp.cliente_id) qs.set("cliente_id", sp.cliente_id);
+  else if (sp.apiKey) qs.set("apiKey", sp.apiKey);
 
-  const client = await pool.connect();
-  try {
-    const params: any[] = [clienteId, state];
-    let where = 'cliente_id = $1 AND state = $2';
-    if (q) {
-      params.push(`%${q}%`);
-      where += ' AND content ILIKE $3';
-    }
+  const data = await api<{ ok: true; items: any[] }>(`/api/memoria?${qs.toString()}`);
+  const items: MemItem[] = (data.items ?? []).map((r) => ({
+    id: r.id,
+    tipo: r.metadata?.role ?? "system",
+    contenido: r.content,
+    estado: r.state,
+    created_at: r.created_at,
+  }));
 
-    const { rows } = await client.query<MemItem>(
-      `
-      SELECT id, content, metadata, state, created_at, approved_at, approved_by
-      FROM public.n8n_vectors
-      WHERE ${where}
-      ORDER BY created_at DESC
-      LIMIT 100;
-      `,
-      params,
-    );
-
-    return (
-      <div className="p-6 space-y-4">
-        <h1 className="text-2xl font-semibold">Memoria</h1>
-
-        {/* (Opcional) controles de filtro/búsqueda */}
-        {/* Puedes agregar tabs para state y un input para q */}
-
-        <MemoriaTable initialItems={rows} clienteId={clienteId} />
-      </div>
-    );
-  } finally {
-    client.release();
-  }
+  return (
+    <div className="p-6 space-y-4">
+      <h1 className="text-xl font-semibold mb-2">Memoria</h1>
+      {items.length ? <MemoryTable initialItems={items} /> : <Empty description="Sin memoria para mostrar." />}
+    </div>
+  );
 }

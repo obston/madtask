@@ -1,31 +1,27 @@
-import { NextResponse } from "next/server";
-import { q } from "@/lib/db";
+// src/app/api/conversaciones/[session_id]/route.ts
+import { NextResponse } from 'next/server';
+import { pool, q, qOne } from '@/lib/db';
+import { resolveClienteId } from '../../_utils';
 
-export async function GET(
-  req: Request,
-  ctx: { params: Promise<{ session_id: string }> }
-) {
-  try {
-    const { session_id } = await ctx.params;
+export async function GET(req: Request, ctx: { params: { session_id: string } }) {
+  const url = new URL(req.url);
+  const limit = Math.min(500, parseInt(url.searchParams.get('limit') ?? '200', 10));
 
-    const url = new URL(req.url);
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10), 200);
+  const cid = await resolveClienteId({
+    apiKey: url.searchParams.get('apiKey'),
+    cliente_id: url.searchParams.get('cliente_id'),
+  });
+  if (!cid) return NextResponse.json({ ok: false, error: 'Cliente no encontrado' }, { status: 404 });
 
-    // Usa q(sql, params) en lugar de tag template (ver punto 2)
-    const rows = await q<{ role: "user"|"assistant"|"system"; message: string|null; created_at: string }>(
-      `
-      SELECT role, message, created_at
-      FROM public.n8n_chat_histories
-      WHERE session_id = $1
-      ORDER BY id ASC
-      LIMIT $2
-      `,
-      [session_id, limit]
-    );
+  const rows = await q<{ role: 'user'|'assistant'|'system'; message: string | null; created_at: string }>`
+   SELECT role, message, created_at::text
+    FROM public.n8n_chat_histories
+    WHERE cliente_id = ${cid} AND session_id = ${ctx.params.session_id}
+    ORDER BY id DESC
+    LIMIT ${limit}
+  `;
+    [cid, ctx.params.session_id, limit]
+  ;
 
-    return NextResponse.json({ ok: true, items: rows });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: "No se pudo cargar historial" }, { status: 500 });
-  }
+  return NextResponse.json({ ok: true, items: rows });
 }

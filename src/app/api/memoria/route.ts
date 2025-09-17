@@ -1,59 +1,29 @@
-import { NextResponse } from 'next/server';
-import { pool } from '@/lib/db';
-import { resolveClienteId } from '@/lib/tenant';
+import { NextResponse } from "next/server";
+import { q } from "@/lib/db";
+import { cidFromReq } from "../_utils";
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const state = url.searchParams.get('state') ?? 'pending'; // pending|approved|archived|forgotten
-  const q = url.searchParams.get('q') ?? '';
-  const page = Number(url.searchParams.get('page') ?? '1');
-  const pageSize = Math.min(
-    100,
-    Math.max(1, Number(url.searchParams.get('pageSize') ?? '20'))
-  );
-  const offset = (page - 1) * pageSize;
+  const { url, cid } = await cidFromReq(req);
+  if (!cid) return NextResponse.json({ ok:false, error:"Cliente no encontrado" }, { status:404 });
 
-  const client = await pool.connect();
-  try {
-    const clienteId = await resolveClienteId(req.url, client);
+  const state = (url.searchParams.get("state") ?? "pending").toLowerCase();
+  const qText = (url.searchParams.get("q") ?? "").trim() || null;
 
-    const params: any[] = [clienteId, state, pageSize, offset];
-    let where = `cliente_id = $1 AND state = $2`;
-    if (q) {
-      params.push(`%${q}%`);
-      where += ` AND content ILIKE $5`;
-    }
+  const items = await q<{
+    id: number;
+    content: string;
+    metadata: any;
+    state: string;
+    created_at: string;
+  }>`
+    SELECT id, content, metadata, state, created_at::text
+    FROM public.n8n_vectors
+    WHERE cliente_id = ${cid}
+      AND (${state} IS NULL OR state = ${state})
+      AND (${qText}::text IS NULL OR content ILIKE '%' || ${qText} || '%')
+    ORDER BY created_at DESC
+    LIMIT 100
+  `;
 
-    const { rows } = await client.query(
-      `
-      SELECT id, content, metadata, state, created_at, approved_at, approved_by
-      FROM public.n8n_vectors
-      WHERE ${where}
-      ORDER BY created_at DESC
-      LIMIT $3 OFFSET $4;
-      `,
-      params
-    );
-
-    const { rows: countRows } = await client.query(
-      `
-      SELECT COUNT(*)::int AS total
-      FROM public.n8n_vectors
-      WHERE ${where};
-      `,
-      params
-    );
-
-    return NextResponse.json({
-      ok: true,
-      data: rows,
-      page,
-      pageSize,
-      total: countRows[0]?.total ?? 0,
-    });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
-  } finally {
-    client.release();
-  }
+  return NextResponse.json({ ok: true, items });
 }
