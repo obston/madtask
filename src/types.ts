@@ -22,3 +22,10 @@ export type Msg = {
     created_at?: string;
   };
   
+  export type AgendaItem = {
+    id: number | string;
+    titulo: string;
+    cuando: string;
+    estado: "pendiente" | "en curso" | "completado" | "cancelado" | string;
+  };
+  
